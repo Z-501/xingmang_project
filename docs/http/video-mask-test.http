@@ -1,0 +1,177 @@
+### =========================================
+### XingMang - 视频遮罩链路integration 场景s
+### Prerequisite: start the application：http://127.0.0.1:8082
+### 说明：
+### 1. 该模块依赖真实视频文件、MinIO、JavaCV、百度人体分割 SDK
+### 2. 建议准备一个已上传且已创建视频记录的 videoId
+### 3. generate 接口可能耗时较长，请等待处理完成
+### =========================================
+
+@baseUrl = http://127.0.0.1:8082
+@token = 请<ACCESS_TOKEN>
+@videoId = 4
+
+### =========================================
+### 一、基础查询场景
+### =========================================
+
+### 1. 查询某个视频的全部遮罩帧
+### 说明：
+### - 若还未生成过遮罩帧，通常返回空数组
+### - 若已生成，则返回每一帧的时间点、maskFileId、maskUrl、宽高
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/mask-frames
+accessToken: {{token}}
+
+### =========================================
+### 2. 按时间范围查询遮罩帧
+### 说明：
+### - from / to 单位是秒
+### - 用于模拟前端按播放时间段获取遮罩结果
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/mask-frames/range?from=0&to=10
+accessToken: {{token}}
+
+### =========================================
+### 3. 更小时间窗口查询
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/mask-frames/range?from=2&to=5
+accessToken: {{token}}
+
+### =========================================
+### 4. 非法参数场景：from < 0
+### 预期：返回业务异常
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/mask-frames/range?from=-1&to=5
+accessToken: {{token}}
+
+### =========================================
+### 5. 非法参数场景：to < from
+### 预期：返回业务异常
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/mask-frames/range?from=10&to=5
+accessToken: {{token}}
+
+### =========================================
+### 6. 非法参数场景：videoId 不合法
+### 预期：返回业务异常或空数组（取决于接口）
+### =========================================
+GET {{baseUrl}}/videos/0/mask-frames
+accessToken: {{token}}
+
+### =========================================
+### 二、生成遮罩帧场景
+### =========================================
+
+### 1. 使用默认 frameStep 生成遮罩帧
+### 说明：
+### - RequestBody 可为空
+### - 后端会使用默认抽帧步长
+### - 若视频较大，接口耗时会比较长
+### =========================================
+POST {{baseUrl}}/videos/{{videoId}}/mask-frames/generate
+Content-Type: application/json
+accessToken: {{token}}
+
+{}
+
+### =========================================
+### 2. 指定 frameStep 生成遮罩帧
+### 说明：
+### - frameStep 越小，抽帧越密，生成帧越多，耗时越长
+### - 建议先用较大的步长，例如 24、30、48 做场景
+### =========================================
+POST {{baseUrl}}/videos/{{videoId}}/mask-frames/generate
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "frameStep": 24
+}
+
+### =========================================
+### 3. 生成完成后，再查询全部遮罩帧
+### 说明：
+### - 预期可以查到生成结果
+### - 返回里应包含 maskFileId 和 maskUrl
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/mask-frames
+accessToken: {{token}}
+
+### =========================================
+### 4. 再按时间范围查询
+### 说明：
+### - 验证 frameTime 区间过滤是否正确
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/mask-frames/range?from=0&to=20
+accessToken: {{token}}
+
+### =========================================
+### 三、边界与异常场景验证
+### =========================================
+
+### 1. videoId 不存在
+### 预期：返回“视频不存在”类业务异常
+### =========================================
+POST {{baseUrl}}/videos/999999/mask-frames/generate
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "frameStep": 24
+}
+
+### =========================================
+### 2. frameStep 为 0
+### 说明：
+### - 当前代码会自动走默认值或归一化逻辑
+### - 可用于验证边界参数处理是否稳定
+### =========================================
+POST {{baseUrl}}/videos/{{videoId}}/mask-frames/generate
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "frameStep": 0
+}
+
+### =========================================
+### 3. frameStep 为负数
+### =========================================
+POST {{baseUrl}}/videos/{{videoId}}/mask-frames/generate
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "frameStep": -5
+}
+
+### =========================================
+### 4. frameStep 很大
+### 说明：
+### - 当前代码会做上限限制
+### - 可用于验证参数归一化逻辑
+### =========================================
+POST {{baseUrl}}/videos/{{videoId}}/mask-frames/generate
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "frameStep": 999
+}
+
+### =========================================
+### 四、联调结果重点检查项
+### =========================================
+### 1. generate 成功后，mask-frames 接口应能查到结果
+### 2. 返回结果中应包含：
+###    - videoId
+###    - frameIndex
+###    - frameTime
+###    - maskFileId
+###    - maskUrl
+###    - width / height
+### 3. maskUrl 应可访问到真实遮罩图
+### 4. 重复 generate 时，当前实现会删旧元数据再重新生成
+###    但旧文件对象可能不会自动清理，这是当前实现的已知特征
+### =========================================

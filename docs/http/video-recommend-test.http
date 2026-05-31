@@ -1,0 +1,169 @@
+### =========================
+### 基础配置
+### =========================
+
+@baseUrl = http://127.0.0.1:8080
+@tokenA = <ACCESS_TOKEN_A>
+@tokenB = <ACCESS_TOKEN_B>
+
+### 用来做“行为触发”的目标视频
+### 要求：
+### 1. 这是一个“已发布”视频
+### 2. 不是 tokenA 自己发布的
+### 3. 最好带标签，便于观察推荐效果
+@targetVideoId = 4
+
+### 可选：如果你知道某个作者ID，也可以拿来辅助对比其作品流
+@targetAuthorId = 2
+
+
+### =========================
+### 1. 推荐接口：基础访问
+### 说明：
+### - 用 tokenA 拉推荐
+### - 如果 A 没有任何点赞/投币/收藏行为，会走冷启动兜底
+### - 当前冷启动兜底 = 排除自己视频后的最新发布流
+### =========================
+GET {{baseUrl}}/videos/recommend?pageNum=1&pageSize=10
+accessToken: {{tokenA}}
+
+
+### =========================
+### 2. 推荐接口：另一个用户访问
+### 说明：
+### - 用 tokenB 拉推荐
+### - 适合和 tokenA 做对比
+### =========================
+GET {{baseUrl}}/videos/recommend?pageNum=1&pageSize=10
+accessToken: {{tokenB}}
+
+
+### =========================
+### 3. 推荐接口：场景分页参数兜底
+### 说明：
+### - 服务端会对 pageNum < 1 会矫正成 1
+### - pageSize < 1 会矫正成 10
+### - pageSize > 30 会限制成 30
+### =========================
+GET {{baseUrl}}/videos/recommend?pageNum=0&pageSize=100
+accessToken: {{tokenA}}
+
+
+### =========================
+### 4. 先查看目标视频详情
+### 说明：
+### - 确认这个视频是已发布的
+### - 确认它有标题、作者、标签
+### - 后续你对它点赞/收藏/投币后，再观察推荐变化
+### =========================
+GET {{baseUrl}}/videos/{{targetVideoId}}
+accessToken: {{tokenA}}
+
+
+### =========================
+### 5. 查看目标视频当前互动信息
+### 说明：
+### - 先看当前 liked / collected / coined 状态
+### - 避免你重复点 toggle 接口，导致又取消了
+### =========================
+GET {{baseUrl}}/videos/{{targetVideoId}}/interaction
+accessToken: {{tokenA}}
+
+
+### =========================
+### 6. 点赞目标视频
+### 说明：
+### - 这是 toggle 接口
+### - 如果当前没点赞，调用后会点赞成功
+### - 如果当前已经点赞，再调一次会变成取消点赞
+### - 因此建议先看上面的 interaction 再决定要不要点
+### =========================
+POST {{baseUrl}}/videos/{{targetVideoId}}/like
+accessToken: {{tokenA}}
+
+
+### =========================
+### 7. 收藏目标视频
+### 说明：
+### - 也是 toggle 接口
+### - 建议只在确认未收藏时执行一次
+### =========================
+POST {{baseUrl}}/videos/{{targetVideoId}}/collect
+accessToken: {{tokenA}}
+
+
+### =========================
+### 8. 投币目标视频
+### 说明：
+### - 投币不是 toggle
+### - 当前代码里投币会写入更强的偏好分
+### - 一般适合作为更明显的推荐信号
+### =========================
+POST {{baseUrl}}/videos/{{targetVideoId}}/coin
+accessToken: {{tokenA}}
+
+
+### =========================
+### 9. 再看一次互动信息
+### 说明：
+### - 确认 like / collect / coin 是否已经生效
+### =========================
+GET {{baseUrl}}/videos/{{targetVideoId}}/interaction
+accessToken: {{tokenA}}
+
+
+### =========================
+### 10. 行为触发后，再拉一次推荐
+### 预期：
+### - 当前用户 tokenA 的推荐结果会更偏向：
+###   1. 与 targetVideoId 同作者的视频
+###   2. 与 targetVideoId 同标签的视频
+### - 并且会过滤掉已经互动过的视频本身
+### =========================
+GET {{baseUrl}}/videos/recommend?pageNum=1&pageSize=10
+accessToken: {{tokenA}}
+
+
+### =========================
+### 11. 第二页推荐
+### 说明：
+### - 用来看 hasMore 和分页是否正常
+### =========================
+GET {{baseUrl}}/videos/recommend?pageNum=2&pageSize=10
+accessToken: {{tokenA}}
+
+
+### =========================
+### 12. 对比首页流
+### 说明：
+### - 当前 /videos/home 是普通已发布视频流
+### - 可以拿它和 /videos/recommend 做对比
+### =========================
+GET {{baseUrl}}/videos/home?pageNum=1&pageSize=10
+accessToken: {{tokenA}}
+
+
+### =========================
+### 13. 查看目标作者的作品流（可选）
+### 说明：
+### - 如果推荐结果偏向该作者，可以用这个接口辅助对比
+### =========================
+GET {{baseUrl}}/videos/user/{{targetAuthorId}}?pageNum=1&pageSize=10
+accessToken: {{tokenA}}
+
+
+### =========================
+### 14. 冷启动验证（建议新号或无互动账号场景）
+### 说明：
+### - 如果 tokenB 没有点赞/收藏/投币记录
+### - 它的 recommend 应接近“排除自己视频后的首页发布流”
+### =========================
+GET {{baseUrl}}/videos/recommend?pageNum=1&pageSize=10
+accessToken: {{tokenB}}
+
+
+### =========================
+### 15. 冷启动用户首页流对比
+### =========================
+GET {{baseUrl}}/videos/home?pageNum=1&pageSize=10
+accessToken: {{tokenB}}

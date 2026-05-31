@@ -1,0 +1,47 @@
+# Build output
+target/
+build/
+out/
+*.class
+*.jar
+*.war
+*.ear
+
+# Maven wrapper binary cache
+.mvn/wrapper/maven-wrapper.jar
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+application-local.yml
+application-secret.yml
+*.pem
+*.key
+*.p12
+*.jks
+
+# IDE and editor metadata
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+logs/
+*.log
+*.tmp
+*.bak
+
+# JetBrains HTTP Client generated responses
+.idea/httpRequests/

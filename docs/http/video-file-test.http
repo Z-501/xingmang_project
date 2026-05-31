@@ -1,0 +1,51 @@
+### =========================================
+### XingMang - 文件上传模块场景
+### Prerequisite: start the application：http://localhost:8082
+### =========================================
+
+@baseUrl = http://127.0.0.1:8082
+@token = <ACCESS_TOKEN>
+@fileMd5 = new-md5-20260331-002
+
+### =========================================
+### 1. 秒传检查
+### =========================================
+GET {{baseUrl}}/files/check?fileMd5={{fileMd5}}
+accessToken: {{token}}
+
+### =========================================
+### 2. 获取上传预签名 URL
+### =========================================
+POST {{baseUrl}}/files/upload-url
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "fileName": "test-video.mp4",
+  "contentType": "video/mp4",
+  "fileSize": 1024000,
+  "fileMd5": "{{fileMd5}}"
+}
+
+### =========================================
+### 3. 上传完成后确认入库
+### 注意：objectName 要填上一步返回的 objectName
+### =========================================
+POST {{baseUrl}}/files/complete
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "objectName": "video/7/694ed490-cb81-46b8-873f-f04026a722e6.mp4",
+  "originalFileName": "test.mp4",
+  "fileType": "video/mp4",
+  "fileSize": 7223000,
+  "fileMd5": "{{fileMd5}}"
+}
+
+### =========================================
+### 4. 获取文件访问地址
+### 把 fileId 换成上一步返回值
+### =========================================
+GET {{baseUrl}}/files/view-url/1
+accessToken: {{token}}

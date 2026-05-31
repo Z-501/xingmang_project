@@ -1,0 +1,15 @@
+wsA.send(JSON.stringify({
+  content: "示例弹幕 1",
+  danmuTime: 11.3,
+  color: "#FFFFFF",
+  mode: 1,
+fontSize: 2
+}));
+
+wsA.send(JSON.stringify({
+  content: "示例弹幕 2",
+  danmuTime: 12.6,
+  color: "#00FF00",
+  mode: 2,
+  fontSize: 3
+}));

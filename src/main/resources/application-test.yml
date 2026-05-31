@@ -1,0 +1,7 @@
+spring:
+  main:
+    lazy-initialization: true
+
+app:
+  jwt:
+    secret: test-secret-for-jwt-signing-at-least-32-bytes

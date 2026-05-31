@@ -1,0 +1,146 @@
+### =========================================
+### XingMang - 动态 Feed 流integration 场景s
+### Prerequisite: start the application：http://localhost:8082
+### =========================================
+
+@baseUrl = http://localhost:8082
+### =========================================
+### 0. 注册用户A
+### =========================================
+POST http://127.0.0.1:8082/users/register
+Content-Type: application/json
+{
+  "phone": "17396740868",
+  "password": "example-password"
+}
+
+### =========================================
+### 0. 注册用户B
+### =========================================
+POST http://127.0.0.1:8082/users/register
+Content-Type: application/json
+{
+  "phone": "17711390258",
+  "password": "example-password"
+}
+
+### 用户A = 粉丝
+@phoneA = 17396740868
+@passwordA = example-password
+@userAId = 6
+
+### 用户B = 博主
+@phoneB = 17711390258
+@passwordB = example-password
+@userBId = 7
+
+### 登录后，把返回里的 accessToken 手动复制到这里
+@tokenA = <ACCESS_TOKEN_A>
+@tokenB = <ACCESS_TOKEN_B>
+
+### 滚动分页场景时使用
+@lastTime = 9999999999999
+
+### =========================================
+### 1. 用户A登录
+### 接口：POST /users/login
+### =========================================
+POST {{baseUrl}}/users/login
+Content-Type: application/json
+
+{
+  "phone": "{{phoneA}}",
+  "password": "{{passwordA}}"
+}
+
+### =========================================
+### 2. 用户B登录
+### =========================================
+POST {{baseUrl}}/users/login
+Content-Type: application/json
+
+{
+  "phone": "{{phoneB}}",
+  "password": "{{passwordB}}"
+}
+
+### =========================================
+### 3. 用户A关注用户B
+### 接口：POST /follow/add
+### 请求头必须用 accessToken
+### groupId 可不传，走默认分组
+### =========================================
+POST {{baseUrl}}/follow/add
+Content-Type: application/json
+accessToken: {{tokenA}}
+
+{
+  "followingId": {{userBId}}
+}
+
+### =========================================
+### 4. 查看用户A关注列表
+### 用来确认 A 是否真的关注了 B
+### =========================================
+GET {{baseUrl}}/follow/list
+accessToken: {{tokenA}}
+
+### =========================================
+### 5. 查看用户B粉丝列表
+### 用来确认 B 的粉丝里是否包含 A
+### =========================================
+GET {{baseUrl}}/follow/fans
+accessToken: {{tokenB}}
+
+### =========================================
+### 6. 用户B发布动态
+### UserMoment 当前字段：
+### type: 0视频 1直播 2专栏
+### contentId: 内容详情ID
+### =========================================
+POST {{baseUrl}}/user-moments
+Content-Type: application/json
+accessToken: {{tokenB}}
+
+{
+  "type": "0",
+  "contentId": 10001
+}
+
+### =========================================
+### 7. 用户B再发布一条动态
+### 用于场景顺序
+### =========================================
+POST {{baseUrl}}/user-moments
+Content-Type: application/json
+accessToken: {{tokenB}}
+
+{
+  "type": "0",
+  "contentId": 10002
+}
+
+### =========================================
+### 8. 用户A查询动态流
+### =========================================
+GET {{baseUrl}}/user-moments?pageSize=10
+accessToken: {{tokenA}}
+
+### =========================================
+### 9. 用户A查询动态流（滚动分页）
+### 把上一页最后一条的时间戳填到 @lastTime
+### =========================================
+GET {{baseUrl}}/user-moments?pageSize=10&lastTime={{lastTime}}
+accessToken: {{tokenA}}
+
+### =========================================
+### 10. 用户A登出
+### =========================================
+POST {{baseUrl}}/users/logout
+accessToken: {{tokenA}}
+
+### =========================================
+### 11. 用户B登出
+### =========================================
+POST {{baseUrl}}/users/logout
+accessToken: {{tokenB}}

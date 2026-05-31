@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: xingmang
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:change-me-to-a-strong-secret-with-at-least-32-chars}
+    access-token-expiration-ms: ${APP_ACCESS_TOKEN_EXPIRATION_MS:1800000}
+    refresh-token-expiration-ms: ${APP_REFRESH_TOKEN_EXPIRATION_MS:604800000}

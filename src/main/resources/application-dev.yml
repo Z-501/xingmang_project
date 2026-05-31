@@ -1,0 +1,50 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/xingmang_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      lettuce:
+        pool:
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:0}
+
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  producer:
+    group: ${ROCKETMQ_PRODUCER_GROUP:xingmang-producer-group}
+
+xingmang:
+  rocketmq:
+    moments-consumer:
+      enabled: ${MOMENTS_CONSUMER_ENABLED:true}
+
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://127.0.0.1:9000}
+  publicEndpoint: ${MINIO_PUBLIC_ENDPOINT:http://127.0.0.1:9000}
+  accessKey: ${MINIO_ACCESS_KEY:minioadmin}
+  secretKey: ${MINIO_SECRET_KEY:minioadmin}
+  bucketName: ${MINIO_BUCKET_NAME:xingmang-api}
+  uploadUrlExpireSeconds: ${MINIO_UPLOAD_URL_EXPIRE_SECONDS:3600}
+  viewUrlExpireSeconds: ${MINIO_VIEW_URL_EXPIRE_SECONDS:3600}
+
+baidu:
+  body-analysis:
+    app-id: ${BAIDU_BODY_APP_ID:}
+    api-key: ${BAIDU_BODY_API_KEY:}
+    secret-key: ${BAIDU_BODY_SECRET_KEY:}
+    connection-timeout-millis: ${BAIDU_CONNECTION_TIMEOUT_MILLIS:2000}
+    socket-timeout-millis: ${BAIDU_SOCKET_TIMEOUT_MILLIS:60000}
+
+logging:
+  level:
+    com.example.xingmang: INFO
+    org.apache.ibatis: WARN

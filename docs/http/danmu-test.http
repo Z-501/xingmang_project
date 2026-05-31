@@ -1,0 +1,179 @@
+### =========================================
+### XingMang - 弹幕链路integration 场景s
+### Prerequisite: start the application：http://127.0.0.1:8082
+### 说明：
+### 1. HTTP 部分可直接在 IDE HTTP Client 中执行
+### 2. WebSocket 部分需要在浏览器控制台或 WebSocket 客户端中执行
+### 3. 建议先准备一个“已发布视频”的 videoId
+### =========================================
+
+@baseUrl = http://127.0.0.1:8082
+@wsBaseUrl = ws://127.0.0.1:8082/ws/danmu
+@tokenA = <ACCESS_TOKEN_A>
+@tokenB = <ACCESS_TOKEN_B>
+@videoId = 4
+
+### =========================================
+### 一、HTTP 查询场景
+### =========================================
+
+### 1. 查询某个视频的近期弹幕（只查 Redis）
+### 说明：
+### - 适合在已经发送过实时弹幕后执行
+### - 若 Redis 中暂无数据，应返回空数组
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/danmus/recent
+accessToken: {{tokenA}}
+
+### =========================================
+### 2. 查询某个视频的近期弹幕（指定 limit）
+### 说明：
+### - 用于验证 limit 参数是否生效
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/danmus/recent?limit=5
+accessToken: {{tokenA}}
+
+### =========================================
+### 3. 播放器初始化弹幕查询
+### 说明：
+### - 先查 Redis，若不够再查 MySQL 补齐
+### - 若最近刚发送过弹幕，通常能查到较新的记录
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/danmus/init?limit=20
+accessToken: {{tokenA}}
+
+### =========================================
+### 4. 历史弹幕区间查询
+### 说明：
+### - from / to 单位是“视频播放秒数”
+### - 可用于模拟播放器拖动进度条后的历史弹幕拉取
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/danmus/history?from=0&to=30&limit=20
+accessToken: {{tokenA}}
+
+### =========================================
+### 5. 历史弹幕区间查询（更小时间窗口）
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/danmus/history?from=10&to=15&limit=10
+accessToken: {{tokenA}}
+
+### =========================================
+### 6. 非法参数场景：from < 0
+### 预期：应返回业务异常
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/danmus/history?from=-1&to=10&limit=10
+accessToken: {{tokenA}}
+
+### =========================================
+### 7. 非法参数场景：to < from
+### 预期：应返回业务异常
+### =========================================
+GET {{baseUrl}}/videos/{{videoId}}/danmus/history?from=20&to=10&limit=10
+accessToken: {{tokenA}}
+
+### =========================================
+### 8. 非法参数场景：videoId 不合法
+### 说明：
+### - recent/init 一般返回空数组
+### - history 由于 service 有校验，通常会报业务异常
+### =========================================
+GET {{baseUrl}}/videos/0/danmus/recent?limit=10
+accessToken: {{tokenA}}
+
+### =========================================
+### 二、WebSocket 实时弹幕场景
+### =========================================
+### 使用方式：
+### 1. 打开浏览器控制台
+### 2. 执行下面的连接代码
+### 3. 建议同时建立 A、B 两个连接，观察是否能互相收到广播
+### =========================================
+
+### WebSocket 连接地址示例：
+### ws://127.0.0.1:8082/ws/danmu?accessToken=<ACCESS_TOKEN>&videoId=4
+
+### 浏览器控制台示例代码（用户A）
+### -----------------------------------------
+### const wsA = new WebSocket("ws://127.0.0.1:8082/ws/danmu?accessToken=替换成tokenA&videoId=4");
+### wsA.onopen = () => console.log("A连接成功");
+### wsA.onmessage = (e) => console.log("A收到消息", e.data);
+### wsA.onerror = (e) => console.log("A连接异常", e);
+### wsA.onclose = () => console.log("A连接关闭");
+
+### 浏览器控制台示例代码（用户B）
+### -----------------------------------------
+### const wsB = new WebSocket("ws://127.0.0.1:8082/ws/danmu?accessToken=替换成tokenB&videoId=4");
+### wsB.onopen = () => console.log("B连接成功");
+### wsB.onmessage = (e) => console.log("B收到消息", e.data);
+### wsB.onerror = (e) => console.log("B连接异常", e);
+### wsB.onclose = () => console.log("B连接关闭");
+
+### 用户A发送弹幕示例
+### -----------------------------------------
+### wsA.send(JSON.stringify({
+###   content: "示例弹幕 1",
+###   danmuTime: 11.3,
+###   color: "#FFFFFF",
+###   mode: 1,
+###   fontSize: 2
+### }));
+
+### 用户B发送弹幕示例
+### -----------------------------------------
+### wsB.send(JSON.stringify({
+###   content: "示例弹幕 2",
+###   danmuTime: 12.6,
+###   color: "#00FF00",
+###   mode: 2,
+###   fontSize: 3
+### }));
+
+### 预期验证点：
+### 1. A、B 均能成功建立连接
+### 2. A 发送后，A/B 都能收到广播消息
+### 3. B 发送后，A/B 都能收到广播消息
+### 4. 随后执行 recent/init/history 接口，能查到这些弹幕
+
+### =========================================
+### 三、WebSocket 异常场景验证
+### =========================================
+
+### 1. 缺少 accessToken
+### 连接示例：
+### new WebSocket("ws://127.0.0.1:8082/ws/danmu?videoId=4")
+### 预期：握手失败
+
+### 2. 缺少 videoId
+### 连接示例：
+### new WebSocket("ws://127.0.0.1:8082/ws/danmu?accessToken=<ACCESS_TOKEN>")
+### 预期：握手失败
+
+### 3. 非法 videoId
+### 连接示例：
+### new WebSocket("ws://127.0.0.1:8082/ws/danmu?accessToken=<ACCESS_TOKEN>&videoId=abc")
+### 预期：握手失败
+
+### 4. 非法消息格式
+### 连接成功后执行：
+### wsA.send("not-json")
+### 预期：服务端报业务异常，当前消息不应被正常处理
+
+### 5. 非法业务参数
+### 连接成功后执行：
+### wsA.send(JSON.stringify({
+###   content: "",
+###   danmuTime: -1,
+###   color: "#FFFFFF",
+###   mode: 1,
+###   fontSize: 2
+### }));
+### 预期：服务端拦截，不应正常广播
+
+### =========================================
+### 四、异步持久化验证建议
+### =========================================
+### 1. 先用 WebSocket 发送几条弹幕
+### 2. 等待 1~3 秒，让 RocketMQ 消费完成
+### 3. 再执行 init/history 接口
+### 4. 若 Redis 过期后，history 仍能查到，则说明 MySQL 持久化链路正常
+### =========================================

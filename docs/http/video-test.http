@@ -1,0 +1,38 @@
+@baseUrl = http://127.0.0.1:8082
+@token = <ACCESS_TOKEN>
+
+
+### 1. 创建视频草稿
+### =========================================
+POST {{baseUrl}}/videos
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "fileId": 5,
+  "coverFileId": null,
+  "title": "示例视频",
+  "description": "这是B创建的草稿",
+  "duration": 120
+}
+
+### 2. 发布视频
+### =========================================
+POST {{baseUrl}}/videos/5/publish
+accessToken: {{token}}
+
+### 3. 查询视频详情
+GET {{baseUrl}}/videos/1
+accessToken: {{token}}
+
+
+### 首页视频流
+### =========================================
+GET {{baseUrl}}/videos/home?pageNum=1&pageSize=10
+accessToken: {{token}}
+
+
+### 作者作品列表
+### =========================================
+GET {{baseUrl}}/videos/user/7?pageNum=1&pageSize=10
+accessToken: {{token}}

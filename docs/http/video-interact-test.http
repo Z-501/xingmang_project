@@ -1,0 +1,41 @@
+@baseUrl = http://127.0.0.1:8082
+@tokenA = <ACCESS_TOKEN_A>
+@tokenB = <ACCESS_TOKEN_B>
+
+### 查询当前登录用户，对这个视频的互动状态
+
+### 1. 查询视频互动信息
+GET {{baseUrl}}/videos/4/interaction
+accessToken: {{tokenA}}
+
+### 2. 点赞
+POST {{baseUrl}}/videos/4/like
+accessToken: {{tokenA}}
+
+### 3. 再点一次赞（取消点赞）
+POST {{baseUrl}}/videos/4/like
+accessToken: {{tokenA}}
+
+### 4. 收藏
+POST {{baseUrl}}/videos/4/collect
+accessToken: {{tokenA}}
+
+### 5. 再点一次收藏（取消收藏）
+POST {{baseUrl}}/videos/4/collect
+accessToken: {{tokenA}}
+
+### 6. 投币
+POST {{baseUrl}}/videos/4/coin
+accessToken: {{tokenA}}
+
+### 7. 再次投币（预期返回业务异常）
+POST {{baseUrl}}/videos/4/coin
+accessToken: {{tokenA}}
+
+### 8. 查看视频详情（会带三连状态）
+### 这里会看到两种状态，一个是这个视频的总点赞收藏投币情况，一个是自己有没有过点赞评论投币
+#GET {{baseUrl}}/videos/4
+#accessToken: {{tokenA}}
+
+GET {{baseUrl}}/videos/4
+accessToken: {{tokenB}}

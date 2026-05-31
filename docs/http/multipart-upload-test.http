@@ -1,0 +1,137 @@
+### =========================================
+### XingMang - 文件分片上传模块场景
+### Prerequisite: start the application：http://localhost:8082
+### 使用方式：按顺序执行；把上一步返回值手动填到下一个请求里
+### =========================================
+
+@baseUrl = http://127.0.0.1:8082
+@token = <ACCESS_TOKEN>
+
+### 文件基础信息（示例）
+@fileName = big-video.mp4
+@contentType = video/mp4
+@fileSize = 104857600
+@fileMd5 = test-md5-20260401-001
+@totalChunks = 20
+
+### 分片任务信息（需要根据接口返回手动更新）
+@uploadId = 请替换成_init_接口返回的uploadId
+@objectName = 请替换成_init_接口返回的objectName
+
+### 当前场景分片编号
+@partNumber = 1
+
+### 当前分片上传地址（需要根据 presigned-url 接口返回手动更新）
+@uploadUrl = 请替换成_presigned-url_接口返回的uploadUrl
+
+### =========================================
+### 1. 初始化分片上传任务
+### 说明：
+### - 若命中秒传，返回 existed=true + fileId，后续步骤不用继续
+### - 若未命中秒传，返回 uploadId + objectName，继续执行后面的步骤
+### =========================================
+POST {{baseUrl}}/files/multipart/init
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "fileName": "{{fileName}}",
+  "contentType": "{{contentType}}",
+  "fileSize": {{fileSize}},
+  "fileMd5": "{{fileMd5}}",
+  "totalChunks": {{totalChunks}}
+}
+
+### =========================================
+### 2. 查询已上传分片（断点续传时先查这个）
+### 说明：
+### - uploadedParts 返回已完成的分片编号列表
+### - 比如返回 [1,2,3,4]，说明前端可以从第 5 片继续
+### =========================================
+GET {{baseUrl}}/files/multipart/check?uploadId={{uploadId}}
+accessToken: {{token}}
+
+### =========================================
+### 3. 获取某一片的预签名上传地址
+### 说明：
+### - 每上传一个分片前，先调一次这个接口
+### - 把返回的 uploadUrl 复制到上面的 @uploadUrl 变量中
+### =========================================
+POST {{baseUrl}}/files/multipart/presigned-url
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "uploadId": "{{uploadId}}",
+  "partNumber": {{partNumber}}
+}
+
+### =========================================
+### 4. 直接上传当前分片到 MinIO
+### 说明：
+### - 这是直传对象存储，不经过业务后端
+### - 这里演示上传第 1 片；实际场景时你可以准备 chunk 文件
+### - JetBrains HTTP Client 支持 < 本地文件路径 方式发送二进制文件
+### - Replace the placeholder path with a local chunk file before execution
+### =========================================
+PUT {{uploadUrl}}
+Content-Type: application/octet-stream
+
+< ./sample-data/chunks/chunk-001.part
+
+### =========================================
+### 5. 通知后端：当前分片已上传完成
+### 说明：
+### - 成功后 Redis 会记录该 partNumber 已完成
+### =========================================
+POST {{baseUrl}}/files/multipart/part-complete
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "uploadId": "{{uploadId}}",
+  "partNumber": {{partNumber}}
+}
+
+### =========================================
+### 6. 重复上传其它分片
+### 说明：
+### - 把 @partNumber 改成 2、3、4 ...
+### - 每一片都重复执行：步骤 3 -> 步骤 4 -> 步骤 5
+### =========================================
+
+### =========================================
+### 7. 全部分片上传完成后，通知后端合并
+### 说明：
+### - 成功后 data 一般就是新的 fileId
+### =========================================
+POST {{baseUrl}}/files/multipart/complete
+Content-Type: application/json
+accessToken: {{token}}
+
+{
+  "uploadId": "{{uploadId}}"
+}
+
+### =========================================
+### 8. （可选）根据返回的 fileId 获取文件访问地址
+### 说明：
+### - 把 10 替换成 complete 接口返回的 fileId
+### =========================================
+GET {{baseUrl}}/files/view-url/10
+accessToken: {{token}}
+
+### =========================================
+### 补充：秒传场景方法
+### 说明：
+### - 使用同一个 fileMd5 再执行一次“步骤 1 初始化上传任务”
+### - 若系统已有该文件，应直接返回 existed=true
+### =========================================
+
+### =========================================
+### 补充：断点续传场景方法
+### 说明：
+### - 先只上传前 2~3 片
+### - 然后重新执行“步骤 2 查询已上传分片”
+### - 若返回 uploadedParts 包含已完成分片，说明断点续传链路正常
+### =========================================
