@@ -45,3 +45,12 @@ logs/
 
 # JetBrains HTTP Client generated responses
 .idea/httpRequests/
+
+# Benchmark generated artifacts
+benchmark_feed/results/*
+!benchmark_feed/results/.gitkeep
+benchmark_upload/results/*
+!benchmark_upload/results/.gitkeep
+benchmark_upload/*.bin
+benchmark_danmu/results/*
+!benchmark_danmu/results/.gitkeep
