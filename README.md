@@ -1,6 +1,6 @@
 # 星芒 XingMang
 
-> 基于 **Java / Spring Boot 3** 构建的微服务化视频社区后端系统，围绕“视频发布、社交关系、动态 Feed、实时弹幕、对象存储、异步消息、AI 视频遮罩”等核心链路进行工程化设计。
+> 基于 **Java / Spring Boot 3** 构建的模块化视频社区后端系统，围绕“视频发布、社交关系、动态 Feed、实时弹幕、对象存储、异步消息、AI 视频遮罩”等核心链路进行工程化设计。
 
 星芒不是一个简单的 CRUD 项目。项目将视频社区中常见的高频业务拆解为清晰的领域模块，并通过 **Redis、RocketMQ、MinIO、WebSocket、MyBatis-Plus、JWT 双 Token、JavaCV 与百度人体分割 SDK** 组合实现更接近真实业务的后端架构。
 
@@ -13,7 +13,7 @@
 | 认证与会话 | BCrypt 密码加密、Access Token + Refresh Token、Redis 管理刷新令牌 | 体现登录安全、会话续期、登出失效等完整认证链路 |
 | 社交关系 | 关注、粉丝、互关判断、关注分组 | 体现复杂列表组装、批量查询优化和领域建模能力 |
 | 动态 Feed | MySQL 持久化 + RocketMQ 异步投递 + Redis Timeline | 体现异步解耦、读写分离思路和高频信息流设计 |
-| 视频存储 | MinIO 对象存储、预签名 URL、文件元数据管理、分片上传 | 避免文件流压垮应用服务，贴近真实视频平台上传流程 |
+| 视频存储 | MinIO 对象存储、Presigned URL、临时分片对象、ComposeObject | 支持客户端直传、分片上传与断点续传，降低应用服务的大文件数据转发压力 |
 | 视频播放 | HTTP Range 分段拉流 | 支持播放器拖动、续播和大文件分段读取 |
 | 实时弹幕 | WebSocket 房间管理、Redis 近期弹幕缓存、RocketMQ 异步落库 | 体现实时通信、冷热数据分层和异步持久化设计 |
 | 推荐与互动 | 点赞、收藏、投币、行为记录、个性化推荐入口 | 展示内容平台常见互动闭环 |
@@ -108,7 +108,7 @@ flowchart TB
 1. **数据链路更长**：一次视频发布会涉及文件存储、元数据落库、状态流转、推荐/首页流展示。
 2. **读写模型不同**：动态 Feed 使用 MySQL 记录源数据，通过 RocketMQ 异步写入 Redis Timeline，降低发布链路与读取链路之间的耦合。
 3. **实时能力更强**：弹幕不是简单插库，而是 WebSocket 实时广播、Redis 近期缓存、MQ 异步持久化的组合链路。
-4. **文件处理更接近生产环境**：视频文件通过 MinIO 管理，使用预签名 URL 和 Range 请求降低应用服务压力。
+4. **文件处理更接近生产环境**：视频文件通过 MinIO 管理，基于 Presigned URL + 临时分片对象 + ComposeObject 实现分片直传与断点续传，并通过 HTTP Range 支持分段播放。
 5. **包含 AI 多媒体能力**：通过 JavaCV 抽帧并调用人体分割 SDK，形成“视频文件 -> 抽帧 -> AI 分割 -> 遮罩帧查询”的处理流程。
 
 ---
@@ -159,7 +159,7 @@ sequenceDiagram
     S->>DB: 持久化动态内容
     S->>MQ: 发送动态发布事件
     MQ->>Consumer: 消费发布事件
-    Consumer->>DB: 查询粉丝关系
+    Consumer->>DB: 查询粉丝 ID
     Consumer->>R: 写入粉丝 Timeline
     C->>API: 拉取动态流
     API->>R: 按时间游标读取 Timeline
@@ -270,6 +270,20 @@ Windows PowerShell：
 
 ---
 
+## Benchmark & Reproducibility
+
+项目针对三个核心链路设计了独立的本地 A/B Benchmark，用于验证架构选择和定位性能瓶颈：
+
+- **Feed 分发**：验证 RocketMQ 异步分发、Redis Pipeline + ZSet，以及逐条 Redis 写入对照。
+- **大文件上传**：对比 Spring Boot Relay 与 MinIO Presigned Direct Upload，观察应用服务器是否承担大文件数据面转发。
+- **实时弹幕**：对比 RocketMQ 异步持久化与同步 MySQL 写入，观察持久化阶段对实时消息处理链路的影响。
+
+Benchmark 代码、测试脚本、指标定义、清理逻辑和复现步骤保留在对应的 `benchmark/*` 分支。公开仓库不提交原始 CSV / JSON 结果、大体积测试文件、真实 Token、密码或本地环境数据。
+
+这些 Benchmark 用于本地工程验证，不代表生产 SLA、公共网络性能或系统最大容量。
+
+---
+
 ## 接口调试文件
 
 手动接口测试文件位于：
@@ -288,6 +302,7 @@ docs/http/*.http
 - 数据库密码、对象存储密钥、JWT Secret、第三方 API Key 必须通过环境变量注入。
 - 如果历史提交中曾经出现过真实密钥，应立即轮换对应密钥。
 - `target/`、IDE 配置、HTTP 响应缓存、日志文件等生成内容不应进入仓库。
+- Benchmark 分支只保留测试设计与复现代码，生成的结果文件和大体积测试数据不进入 Git。
 
 ---
 
@@ -298,8 +313,8 @@ docs/http/*.http
 1. 项目不是后台管理系统，而是内容平台型后端，包含视频、社交、Feed、实时弹幕和 AI 处理链路。
 2. 重点讲 Feed：MySQL 保存源数据，RocketMQ 异步分发，Redis Timeline 支持高频读取。
 3. 重点讲弹幕：WebSocket 实时广播，Redis 做近期缓存，RocketMQ 异步落库。
-4. 重点讲文件：MinIO 预签名 URL 与 Range 分段播放，降低应用服务压力。
-5. 最后讲工程规范：统一异常、统一返回、环境变量配置、测试文档和开源安全处理。
+4. 重点讲文件：MinIO 预签名 URL、分片直传、断点续传与 Range 分段播放，降低应用服务压力。
+5. 最后讲工程规范：统一异常、统一返回、环境变量配置、测试文档和可复现 Benchmark。
 
 ---
 
