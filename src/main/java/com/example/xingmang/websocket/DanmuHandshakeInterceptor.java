@@ -15,12 +15,14 @@ import java.util.Map;
 
 /**
  * Validates WebSocket handshake parameters and stores the authenticated user and room context.
+ * The benchmark branch additionally stores the selected persistence control mode.
  */
 @Component
 public class DanmuHandshakeInterceptor implements HandshakeInterceptor {
 
     public static final String ATTR_USER_ID = "userId";
     public static final String ATTR_VIDEO_ID = "videoId";
+    public static final String ATTR_BENCHMARK_PERSIST_MODE = "benchmarkPersistMode";
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request,
@@ -34,19 +36,16 @@ public class DanmuHandshakeInterceptor implements HandshakeInterceptor {
 
         HttpServletRequest httpRequest = servletRequest.getServletRequest();
 
-        // Read access token from handshake query parameters.
         String accessToken = httpRequest.getParameter("accessToken");
         if (!StringUtils.hasText(accessToken)) {
             throw new ConditionException(401, "缺少 accessToken，无法建立弹幕连接");
         }
 
-        // Validate token and resolve user identity.
         Long userId = JwtUtil.parseToken(accessToken);
         if (userId == null) {
             throw new ConditionException(401, "用户信息已过期，请重新登录");
         }
 
-        // Validate target video room.
         String videoIdStr = httpRequest.getParameter("videoId");
         if (!StringUtils.hasText(videoIdStr)) {
             throw new ConditionException(400, "缺少 videoId，无法进入弹幕房间");
@@ -63,7 +62,13 @@ public class DanmuHandshakeInterceptor implements HandshakeInterceptor {
             throw new ConditionException(400, "videoId 不合法");
         }
 
-        // Store resolved context for the WebSocket handler.
+        String benchmarkPersistMode = httpRequest.getParameter("benchmarkPersistMode");
+        if ("sync".equalsIgnoreCase(benchmarkPersistMode)) {
+            attributes.put(ATTR_BENCHMARK_PERSIST_MODE, "sync");
+        } else {
+            attributes.put(ATTR_BENCHMARK_PERSIST_MODE, "async");
+        }
+
         attributes.put(ATTR_USER_ID, userId);
         attributes.put(ATTR_VIDEO_ID, videoId);
 
@@ -75,6 +80,6 @@ public class DanmuHandshakeInterceptor implements HandshakeInterceptor {
                                ServerHttpResponse response,
                                WebSocketHandler wsHandler,
                                Exception exception) {
-        // 前期不需要做额外处理
+        // No additional handshake action is required.
     }
 }
