@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -204,6 +205,16 @@ public class FollowingServiceImpl implements FollowingService {
             }
         }
         return fanList;
+    }
+
+    /**
+     * 获取粉丝 ID 列表，用于内部批量分发场景。
+     * 仅查询粉丝 ID，不加载用户资料和互关状态。
+     */
+    @Override
+    public List<Long> getFanIds(Long userId) {
+        List<Long> fanIds = userFollowingMapper.selectFanIdsByFollowingId(userId);
+        return fanIds == null ? Collections.emptyList() : fanIds;
     }
 
     /**
