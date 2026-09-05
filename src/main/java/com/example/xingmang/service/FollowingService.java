@@ -15,6 +15,12 @@ public interface FollowingService {
     /** 获取用户的粉丝列表 */
     List<UserFollowing> getUserFans(Long userId);
 
+    /**
+     * 获取用户的粉丝 ID 列表。
+     * 用于内部批量分发，仅查询粉丝 ID，不加载用户资料和互关状态。
+     */
+    List<Long> getFanIds(Long userId);
+
     /** 用户自定义分组 */
     Long addUserFollowingGroups(FollowingGroup followingGroup);
 
