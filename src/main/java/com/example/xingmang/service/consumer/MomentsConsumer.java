@@ -3,7 +3,6 @@ package com.example.xingmang.service.consumer;
 import com.alibaba.fastjson.JSONObject;
 import com.example.xingmang.config.RocketMQConstant;
 import com.example.xingmang.model.entity.UserMoment;
-import com.example.xingmang.model.entity.UserFollowing;
 import com.example.xingmang.service.FollowingService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
@@ -14,7 +13,6 @@ import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * MomentsConsumer 是动态模块中的消息消费者
@@ -53,17 +51,12 @@ public class MomentsConsumer implements RocketMQListener<String> {
 
         // 2. 幂等性逻辑：防止 MQ 重复投递导致粉丝看到重复动态，通过 ZSet 的自动去重特性实现
         try {
-            // 获取粉丝列表
-            List<UserFollowing> fans = followingService.getUserFans(userId);
-            // 如果没有粉丝，直接结束
-            if (fans == null || fans.isEmpty()) {
+            // Feed 分发仅需要粉丝 ID，避免加载用户资料和互关状态
+            List<Long> fanIds = followingService.getFanIds(userId);
+            if (fanIds == null || fanIds.isEmpty()) {
                 return;
             }
-            // 提取粉丝 ID 列表
-            List<Long> fanIds = fans.stream()
-                    .map(UserFollowing::getUserId)
-                    .collect(Collectors.toList());
-            // 执行 Pipeline 高并发分发
+            // 使用 Redis Pipeline 批量更新粉丝时间线
             dispatchToFans(fanIds, momentId);
 
         } catch (Exception e) {
