@@ -36,7 +36,7 @@ Redis       127.0.0.1:6379
 RocketMQ    127.0.0.1:9876
 ```
 
-安装依赖：
+安装 Python 依赖：
 
 ```powershell
 python -m pip install -r .\requirements.txt
@@ -86,23 +86,34 @@ python .\feed_benchmark.py `
 
 ## Pipeline 与逐条 Redis 写入对照
 
-业务版本使用：
+这个 Benchmark 分支在 `MomentsConsumer` 中提供唯一的 Redis 分发模式开关：
 
-```java
-redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
-    // 相同 ZADD + ZREMRANGE 循环
-});
+```text
+xingmang.benchmark.feed.redis-mode=pipeline   # 默认，正式业务路径
+xingmang.benchmark.feed.redis-mode=single     # 对照组
 ```
 
-严格对照组仅将外层调用改为：
+例如启动对照组时给 Spring Boot 增加：
 
-```java
-redisTemplate.execute((RedisCallback<Object>) connection -> {
-    // 相同 ZADD + ZREMRANGE 循环
-});
+```text
+--xingmang.benchmark.feed.redis-mode=single
 ```
 
-其余条件保持一致：粉丝 ID 查询、Redis Key、ZADD、ZREMRANGE、Timeline 保留数量、MQ 消费方式和线程模型均不改变。该对照用于观察 Pipeline 减少客户端与 Redis 重复往返的效果，而不是并行执行 Redis 命令。
+两种模式共享同一个 `RedisCallback`。Pipeline 使用：
+
+```java
+redisTemplate.executePipelined(callback);
+```
+
+逐条写入对照使用：
+
+```java
+redisTemplate.execute(callback);
+```
+
+其余条件保持一致：`getFanIds()` 粉丝查询、Redis Key、ZADD、ZREMRANGE、Timeline 保留数量、RocketMQ Consumer 和线程模型均不改变。该对照用于观察 Pipeline 减少客户端与 Redis 重复往返的效果，而不是把 Redis 命令并行化。
+
+跑 A/B 时应使用同一批 synthetic followers、相同 rounds、相同 `poll-interval-ms` 和相同机器环境，只切换上述属性。
 
 ## Observer Effect
 
@@ -111,7 +122,7 @@ redisTemplate.execute((RedisCallback<Object>) connection -> {
 因此：
 
 - 端到端正确性验证适合证明“所有粉丝最终都收到 Timeline 更新”。
-- 若要做更干净的 Redis Pipeline / no-Pipeline 性能对照，应降低轮询频率，或增加单一完成标记后再做一次完整正确性扫描。
+- 若要做更干净的 Pipeline / single 性能对照，应降低轮询频率，或增加单一完成标记后再做一次完整正确性扫描。
 - 不应把受到观察者效应影响的倍数直接写成生产性能提升。
 
 ## 清理
