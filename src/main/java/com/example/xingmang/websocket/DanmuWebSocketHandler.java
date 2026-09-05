@@ -1,5 +1,7 @@
 package com.example.xingmang.websocket;
 
+import com.example.xingmang.benchmark.danmu.BenchmarkDanmuMetrics;
+import com.example.xingmang.benchmark.danmu.BenchmarkDanmuSyncPersistence;
 import com.example.xingmang.exception.ConditionException;
 import com.example.xingmang.model.dto.DanmuSendDTO;
 import com.example.xingmang.model.message.DanmuPersistMessage;
@@ -13,15 +15,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+
 import java.time.LocalDateTime;
 import java.util.Collection;
 
 /**
- * 真正处理连接建立、消息接收、房间广播、连接清理。
- * 建立连接时加入房间
- * 收到弹幕消息时校验参数
- * 广播给同房间所有连接
- * 断开连接时移出房间
+ * WebSocket danmu handler.
+ *
+ * The benchmark branch keeps validation, broadcast and Redis cache order identical
+ * in both modes and changes only the persistence stage:
+ * async -> RocketMQ producer handoff; sync -> current handler thread inserts MySQL.
  */
 @Slf4j
 @Component
@@ -32,6 +35,8 @@ public class DanmuWebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final DanmuService danmuService;
     private final DanmuMqProducer danmuMqProducer;
+    private final BenchmarkDanmuSyncPersistence benchmarkDanmuSyncPersistence;
+    private final BenchmarkDanmuMetrics benchmarkDanmuMetrics;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -46,8 +51,10 @@ public class DanmuWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        long handlerStartNs = System.nanoTime();
         Long userId = getUserId(session);
         Long videoId = getVideoId(session);
+        String benchmarkPersistMode = getBenchmarkPersistMode(session);
 
         DanmuSendDTO dto;
         try {
@@ -69,24 +76,50 @@ public class DanmuWebSocketHandler extends TextWebSocketHandler {
                 .createTime(LocalDateTime.now())
                 .build();
 
-        // 1. 先广播，保证实时链优先
-        broadcastToRoom(videoId, danmuMessage);
-        // 2. 再写 Redis 近期缓存，增强初始化体验
-        danmuService.cacheRecentDanmu(danmuMessage);
-        DanmuPersistMessage persistMessage = new DanmuPersistMessage();
-        persistMessage.setVideoId(danmuMessage.getVideoId());
-        persistMessage.setUserId(danmuMessage.getUserId());
-        persistMessage.setContent(danmuMessage.getContent());
-        persistMessage.setDanmuTime(danmuMessage.getDanmuTime());
-        persistMessage.setColor(danmuMessage.getColor());
-        persistMessage.setMode(danmuMessage.getMode());
-        persistMessage.setFontSize(danmuMessage.getFontSize());
-        persistMessage.setCreateTime(danmuMessage.getCreateTime());
+        BenchmarkDanmuMetrics.BenchmarkMessage benchmarkMessage =
+                benchmarkDanmuMetrics.parseBenchmarkMessage(danmuMessage.getContent());
+        boolean recordBenchmark =
+                benchmarkDanmuMetrics.shouldRecord(benchmarkPersistMode, benchmarkMessage);
 
-        try {
-            danmuMqProducer.sendDanmuPersistMessage(persistMessage);
-        } catch (Exception e) {
-            log.warn("Failed to send danmu persistence message, videoId={}, userId={}", videoId, userId, e);
+        long broadcastStartNs = System.nanoTime();
+        broadcastToRoom(videoId, danmuMessage);
+        double broadcastMs = nsToMs(System.nanoTime() - broadcastStartNs);
+
+        long redisStartNs = System.nanoTime();
+        danmuService.cacheRecentDanmu(danmuMessage);
+        double redisCacheMs = nsToMs(System.nanoTime() - redisStartNs);
+
+        long persistStartNs = System.nanoTime();
+        if (BenchmarkDanmuMetrics.MODE_SYNC.equals(benchmarkPersistMode)) {
+            benchmarkDanmuSyncPersistence.persist(danmuMessage);
+        } else {
+            DanmuPersistMessage persistMessage = new DanmuPersistMessage();
+            persistMessage.setVideoId(danmuMessage.getVideoId());
+            persistMessage.setUserId(danmuMessage.getUserId());
+            persistMessage.setContent(danmuMessage.getContent());
+            persistMessage.setDanmuTime(danmuMessage.getDanmuTime());
+            persistMessage.setColor(danmuMessage.getColor());
+            persistMessage.setMode(danmuMessage.getMode());
+            persistMessage.setFontSize(danmuMessage.getFontSize());
+            persistMessage.setCreateTime(danmuMessage.getCreateTime());
+
+            try {
+                danmuMqProducer.sendDanmuPersistMessage(persistMessage);
+            } catch (Exception e) {
+                log.warn("Failed to send danmu persistence message, videoId={}, userId={}", videoId, userId, e);
+            }
+        }
+        double persistStageMs = nsToMs(System.nanoTime() - persistStartNs);
+
+        if (recordBenchmark) {
+            benchmarkDanmuMetrics.record(
+                    benchmarkPersistMode,
+                    benchmarkMessage,
+                    nsToMs(System.nanoTime() - handlerStartNs),
+                    broadcastMs,
+                    redisCacheMs,
+                    persistStageMs
+            );
         }
     }
 
@@ -184,5 +217,14 @@ public class DanmuWebSocketHandler extends TextWebSocketHandler {
     private Long getVideoIdSafely(WebSocketSession session) {
         Object value = session.getAttributes().get(DanmuHandshakeInterceptor.ATTR_VIDEO_ID);
         return value instanceof Long ? (Long) value : null;
+    }
+
+    private String getBenchmarkPersistMode(WebSocketSession session) {
+        Object value = session.getAttributes().get(DanmuHandshakeInterceptor.ATTR_BENCHMARK_PERSIST_MODE);
+        return benchmarkDanmuMetrics.normalizeMode(value instanceof String mode ? mode : null);
+    }
+
+    private double nsToMs(long ns) {
+        return ns / 1_000_000.0;
     }
 }
